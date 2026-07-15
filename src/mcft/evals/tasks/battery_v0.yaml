@@ -1,0 +1,82 @@
+version: 0
+tasks:
+  - id: collect_wood
+    name: Collect wood
+    description: Punch/chop trees until logs are gathered.
+    category: gather
+    success_criteria: "inventory contains >= 10 logs of any type"
+    checker: programmatic
+    max_steps: 40
+    seeds: [10, 23, 33, 41, 54]
+  - id: craft_table
+    name: Craft a crafting table
+    description: Gather wood and craft a crafting table.
+    category: craft
+    success_criteria: "inventory contains >= 1 crafting_table"
+    checker: programmatic
+    max_steps: 60
+    seeds: [10, 23, 33, 41, 54]
+  - id: wooden_pickaxe
+    name: Craft a wooden pickaxe
+    description: Wood -> planks -> sticks -> table -> wooden pickaxe.
+    category: craft
+    success_criteria: "inventory contains >= 1 wooden_pickaxe"
+    checker: programmatic
+    max_steps: 80
+    seeds: [10, 23, 33, 41, 54]
+  - id: stone_tools
+    name: Full stone tools
+    description: Mine stone; craft stone pickaxe, axe, sword, shovel.
+    category: craft
+    success_criteria: "inventory contains stone pickaxe, axe, sword, and shovel"
+    checker: programmatic
+    max_steps: 120
+    seeds: [10, 23, 33, 41, 54]
+  - id: iron_pickaxe
+    name: Craft an iron pickaxe
+    description: Mine iron ore, smelt, craft an iron pickaxe.
+    category: craft
+    success_criteria: "inventory contains >= 1 iron_pickaxe"
+    checker: programmatic
+    max_steps: 240
+    seeds: [10, 23, 33, 41, 54]
+  - id: survive_night
+    name: Survive one night
+    description: Survive from dusk to dawn without dying.
+    category: survive
+    success_criteria: "bot alive at dawn; zero deaths during the night"
+    checker: programmatic
+    max_steps: 240
+    seeds: [10, 23, 33, 41, 54]
+  - id: build_shelter
+    name: Build a 3x3 shelter
+    description: Enclosed 3x3 shelter with a door and roof.
+    category: build
+    success_criteria: "enclosed 3x3 structure with door and roof exists at bot location"
+    checker: judge
+    max_steps: 160
+    seeds: [10, 23, 33, 41, 54]
+  - id: navigate_to
+    name: Navigate to coordinates
+    description: Travel to given coordinates within tolerance.
+    category: navigate
+    success_criteria: "bot within 3 blocks of target coordinates"
+    checker: programmatic
+    max_steps: 100
+    seeds: [10, 23, 33, 41, 54]
+  - id: collect_food
+    name: Collect 10 food
+    description: Acquire 10 units of any edible item.
+    category: gather
+    success_criteria: "inventory contains >= 10 edible items (any mix)"
+    checker: programmatic
+    max_steps: 160
+    seeds: [10, 23, 33, 41, 54]
+  - id: craft_bed
+    name: Craft a bed
+    description: Gather wool and planks; craft a bed.
+    category: craft
+    success_criteria: "inventory contains >= 1 bed"
+    checker: programmatic
+    max_steps: 120
+    seeds: [10, 23, 33, 41, 54]
