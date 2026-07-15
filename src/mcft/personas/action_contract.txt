@@ -1,0 +1,9 @@
+ACTION CONTRACT v0 (placeholder — replaced verbatim by the real Mindcraft
+command reference at integration time; the invariant machinery is what matters now)
+
+- Emit at most one command per turn.
+- Commands use exactly this syntax: !commandName("string_arg", number_arg)
+- Anything that is not a command is plain chat.
+- Never invent a command name you have not been given.
+- If your last command failed, change the plan; never repeat an identical
+  failed command more than twice.
