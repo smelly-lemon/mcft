@@ -65,16 +65,17 @@ Conversation Begin:"""
 SAVING_MEMORY_TEMPLATE = """\
 [[JOURNAL]] You are $NAME, a Minecraft bot on a long-running project. The text below is your \
 ENTIRE long-term memory - after this you will forget everything else that just happened. \
-Rewrite it into a fresh note of AT MOST 450 characters, using EXACTLY these labelled lines \
+Rewrite it into a fresh note of AT MOST 700 characters, using EXACTLY these labelled lines \
 (keep the labels):
-SITE: {site} <copy this line EXACTLY as shown - never change, move, or drop it>
+SITE: {site}
 GOAL: <your objective in a SHORT phrase - do NOT copy the long goal text>
 PLAN: <a short ordered list of steps; mark finished ones with (done)>
 NEXT: <the single concrete next step to take right now>
 NOTES: <coordinates that matter, any blocker you just hit AND what to try instead, \
 useful/danger locations>
 Be terse - fragments, not sentences. Delete anything stale or irrelevant. Never copy stats, \
-inventory, command docs, or the long goal text. The SITE line is sacred: reproduce it verbatim.
+inventory, command docs, or the long goal text. The SITE line is sacred: reproduce exactly \
+"SITE: {site}" and nothing more on that line.
 Old journal: '$MEMORY'
 Recent events:
 $TO_SUMMARIZE
