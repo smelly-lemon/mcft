@@ -65,17 +65,18 @@ Conversation Begin:"""
 SAVING_MEMORY_TEMPLATE = """\
 [[JOURNAL]] You are $NAME, a Minecraft bot on a long-running project. The text below is your \
 ENTIRE long-term memory - after this you will forget everything else that just happened. \
-Rewrite it into a fresh note of AT MOST 1200 characters, using EXACTLY these labelled lines \
+Rewrite it into a fresh note of AT MOST 1500 characters, using EXACTLY these labelled lines \
 (keep the labels):
 SITE: {site}
 GOAL: <your objective in a SHORT phrase - do NOT copy the long goal text>
-PLAN: <a short ordered list of steps; mark finished ones with (done)>
+PLAN: <ordered steps; mark finished ones with (done); keep 4-8 items spanning the current phase>
 NEXT: <the single concrete next step to take right now>
-NOTES: <coordinates that matter, any blocker you just hit AND what to try instead, \
-useful/danger locations>
-Be terse - fragments, not sentences. Delete anything stale or irrelevant. Never copy stats, \
-inventory, command docs, or the long goal text. The SITE line is sacred: reproduce exactly \
-"SITE: {site}" and nothing more on that line.
+NOTES: <dense teacher notes - build coords, material counts that matter, blockers AND the \
+workaround, partner role/status, hazards. Prefer specific numbers over vibes.>
+Use most of the budget on PLAN and NOTES - thin journals waste the memory system. \
+Fragments, not sentences. Delete anything stale. Never copy stats, inventory, command docs, \
+or the long goal text. The SITE line is sacred: reproduce exactly "SITE: {site}" and \
+nothing more on that line.
 Old journal: '$MEMORY'
 Recent events:
 $TO_SUMMARIZE
@@ -106,8 +107,8 @@ def render_profile(persona: Persona, model: str, embedding: str, site: str) -> d
             # think:false = FAST mode per ADR-0004: without it the driver
             # spends minutes reasoning before every chat line (the reasoning tax).
             # (Ollama /api/chat takes sampling under "options", not top-level.)
-            # num_ctx 16384: teacher trajectories need longer working memory;
-            # Studio has headroom (128GB, model ~24GB). Default Ollama load is 8k.
+            # num_ctx 16384: measured system prompt ~2k tok + 75 msgs × ~28 tok ≈ 4.3k
+            # total — 16k is the right ceiling (32k unused headroom, not needed yet).
             "params": {
                 "think": False,
                 "options": {"temperature": 0.7, "num_ctx": 16384},
