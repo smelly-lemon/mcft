@@ -45,6 +45,15 @@ open, solid ground and try again.
 back to open ground.
 - Stay safe: if it is night or your health is low, deal with that before anything else.
 
+HOME SITE - THE ONE PLACE YOU BUILD (re-read every turn):
+- The homestead site is at {site}. ALL construction happens within 20 blocks
+  of it. The site NEVER moves.
+- Compare your position (in your stats) to the site every turn. If you are
+  more than 30 blocks away (in any direction, including BELOW ground), stop
+  what you are doing and return with !goToCoordinates.
+- Do not start projects away from the site. Gather materials anywhere, but
+  always bring them home.
+
 YOUR JOURNAL (this is your ONLY long-term memory - everything not written here is forgotten):
 '$MEMORY'
 
@@ -58,13 +67,14 @@ SAVING_MEMORY_TEMPLATE = """\
 ENTIRE long-term memory - after this you will forget everything else that just happened. \
 Rewrite it into a fresh note of AT MOST 450 characters, using EXACTLY these labelled lines \
 (keep the labels):
+SITE: {site} <copy this line EXACTLY as shown - never change, move, or drop it>
 GOAL: <your objective in a SHORT phrase - do NOT copy the long goal text>
 PLAN: <a short ordered list of steps; mark finished ones with (done)>
 NEXT: <the single concrete next step to take right now>
 NOTES: <coordinates that matter, any blocker you just hit AND what to try instead, \
 useful/danger locations>
 Be terse - fragments, not sentences. Delete anything stale or irrelevant. Never copy stats, \
-inventory, command docs, or the long goal text.
+inventory, command docs, or the long goal text. The SITE line is sacred: reproduce it verbatim.
 Old journal: '$MEMORY'
 Recent events:
 $TO_SUMMARIZE
@@ -84,7 +94,7 @@ MODES = {
 }
 
 
-def render_profile(persona: Persona, model: str, embedding: str) -> dict:
+def render_profile(persona: Persona, model: str, embedding: str, site: str) -> dict:
     style = "\n".join(f"- {rule}" for rule in persona.chat_style)
     boundaries = "\n".join(f"- {rule}" for rule in persona.boundaries)
     return {
@@ -99,11 +109,11 @@ def render_profile(persona: Persona, model: str, embedding: str) -> dict:
         },
         "embedding": embedding,
         "conversing": CONVERSING_TEMPLATE.format(
-            voice=persona.voice.strip(), style=style, boundaries=boundaries
+            voice=persona.voice.strip(), style=style, boundaries=boundaries, site=site
         ),
         "modes": MODES,
         "cooldown": 1500,
-        "saving_memory": SAVING_MEMORY_TEMPLATE,
+        "saving_memory": SAVING_MEMORY_TEMPLATE.format(site=site),
     }
 
 
@@ -113,13 +123,14 @@ def main() -> None:
     parser.add_argument("--out", default="integrations/mindcraft/profiles")
     parser.add_argument("--model", default="qwen3.6:35b")
     parser.add_argument("--embedding", default="ollama/qwen3-embedding:0.6b")
+    parser.add_argument("--site", default="(95, 85, -283)", help="home site coordinates")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     personas = load_all_personas(Path(args.persona_dir))
     for persona in personas.values():
-        profile = render_profile(persona, args.model, args.embedding)
+        profile = render_profile(persona, args.model, args.embedding, args.site)
         path = out_dir / f"{persona.id}.json"
         path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {path}")
