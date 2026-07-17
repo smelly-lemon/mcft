@@ -25,6 +25,11 @@
 - Persona v1 fields (motivation, strategy_bias, risk_tolerance,
   failure_react, recurring_bits, continuity) — see docs/persona-design.md;
   implement for the show-prototype session.
+- Structural communication mechanics experiment (operator idea, 2026-07-17):
+  per-bot time limits with the ability to spawn a partner in (one each), and
+  a shared journal between bots. Forces load-bearing communication and
+  creates cutoff drama; targets the measured chat sparseness (~1% of steps).
+  Not for now — revisit after steady-state behavior is viable.
 - Mock viewer-interaction queue for attended playtests (ADR-0005 lifecycle,
   correlation ids) — precedes any payment work.
 - QAT or imatrix-calibrated quantization for the deploy artifact (Andy-4.2
