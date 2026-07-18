@@ -29,14 +29,17 @@ TOP_COMMANDS = ["!placeHere", "!goToCoordinates", "!collectBlocks", "!craftRecip
 def load_steps() -> list[dict]:
     steps = []
     for f in glob.glob(str(EPISODES / "*" / "steps.jsonl")):
-        prev_out = None
+        prev_out, prev2_out = None, None
         for line in open(f, encoding="utf-8"):
             try:
                 s = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            s["_repeat"] = s.get("model_output") == prev_out
-            prev_out = s.get("model_output")
+            out = s.get("model_output")
+            s["_repeat"] = out == prev_out
+            # period-2 rut: A B A (same as two back, different from last)
+            s["_alt"] = out is not None and out == prev2_out and out != prev_out
+            prev2_out, prev_out = prev_out, out
             steps.append(s)
     return steps
 
@@ -56,6 +59,7 @@ def summarize(steps: list[dict]) -> dict:
         "steps": n,
         "chat_pct": round(100 * chat / n, 1) if n else 0.0,
         "repeats_per_1k": round(1000 * sum(s["_repeat"] for s in steps) / n, 1) if n else 0.0,
+        "alt_per_1k": round(1000 * sum(s["_alt"] for s in steps) / n, 1) if n else 0.0,
         "latency_p50_s": round(lat[len(lat) // 2] / 1000, 1) if lat else None,
         "latency_p95_s": round(lat[int(len(lat) * 0.95)] / 1000, 1) if lat else None,
     }
@@ -89,7 +93,7 @@ def main() -> None:
         f"mcft metrics digest (rolling {WINDOW_H}h windows; regenerated "
         f"{now.strftime('%Y-%m-%d %H:%M UTC')})",
         "",
-        f"{'when (UTC)':<17} {'steps':>6} {'chat%':>6} {'rep/1k':>7} {'p50s':>5} "
+        f"{'when (UTC)':<17} {'steps':>6} {'chat%':>6} {'rep/1k':>7} {'alt/1k':>7} {'p50s':>5} "
         f"{'place%':>7} {'goto%':>6} {'collect%':>9} {'craft%':>7} {'give%':>6}",
     ]
     def pct(window: dict, cmd: str) -> str:
@@ -100,7 +104,8 @@ def main() -> None:
         w = r["recent"]
         lines.append(
             f"{r['at'][5:16]:<17} {w['steps']:>6} {w['chat_pct']:>6} "
-            f"{w['repeats_per_1k']:>7} {w['latency_p50_s'] or '-':>5} "
+            f"{w['repeats_per_1k']:>7} {w.get('alt_per_1k', '-'):>7} "
+            f"{w['latency_p50_s'] or '-':>5} "
             f"{pct(w, '!placeHere'):>7} {pct(w, '!goToCoordinates'):>6} "
             f"{pct(w, '!collectBlocks'):>9} {pct(w, '!craftRecipe'):>7} {pct(w, '!givePlayer'):>6}"
         )
