@@ -16,6 +16,22 @@ if ! lsof -nP -iTCP:25566 -sTCP:LISTEN >/dev/null 2>&1; then
     exit 0
 fi
 
+# Brain check: Ollama must answer a 1-token completion within 120s.
+# 2026-07-19: the runner wedged at a keep_alive unload race; every request
+# hung 5 minutes for ~11h while all *processes* looked alive. A side
+# benefit: probing every 5 min keeps the model resident.
+if lsof -nP -iTCP:11434 -sTCP:LISTEN >/dev/null 2>&1; then
+    probe=$(curl -s -m 120 http://localhost:11434/api/generate \
+        -d '{"model": "qwen3.6:35b", "prompt": "hi", "stream": false, "options": {"num_predict": 1}}' 2>/dev/null)
+    if ! echo "$probe" | grep -q '"done"'; then
+        echo "$(ts) ollama probe failed; killing wedged runner" >> "$LOG"
+        pkill -f "ollama runner" 2>/dev/null
+    fi
+else
+    echo "$(ts) ollama serve not listening; relaunching app" >> "$LOG"
+    open -ga Ollama
+fi
+
 main_alive=$(pgrep -f "node main.js" | head -1)
 agents_alive=$(pgrep -f "init_agent.js" | head -1)
 

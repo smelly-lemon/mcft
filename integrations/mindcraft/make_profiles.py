@@ -109,8 +109,11 @@ def render_profile(persona: Persona, model: str, embedding: str, site: str) -> d
             # (Ollama /api/chat takes sampling under "options", not top-level.)
             # num_ctx 16384: measured system prompt ~2k tok + 75 msgs × ~28 tok ≈ 4.3k
             # total — 16k is the right ceiling (32k unused headroom, not needed yet).
+            # keep_alive -1: never unload. The 2026-07-19 runner wedge began
+            # at exactly the model's keep_alive expiry (unload/reload race).
             "params": {
                 "think": False,
+                "keep_alive": -1,
                 "options": {"temperature": 0.7, "num_ctx": 16384},
             },
         },
