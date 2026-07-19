@@ -16,16 +16,27 @@ if ! lsof -nP -iTCP:25566 -sTCP:LISTEN >/dev/null 2>&1; then
     exit 0
 fi
 
-# Brain check: Ollama must answer a 1-token completion within 120s.
-# 2026-07-19: the runner wedged at a keep_alive unload race; every request
-# hung 5 minutes for ~11h while all *processes* looked alive. A side
-# benefit: probing every 5 min keeps the model resident.
+# Brain check: Ollama must answer a 1-token completion. Busy is NOT wedged:
+# agent requests queue ahead of the probe (one at a time on this model), so
+# give the probe a long timeout and require 2 consecutive failures before
+# killing the runner. History: the 07-19 wedge hung every request at the
+# server's own 5m limit for 11h; the first probe version (120s, single
+# failure) misdiagnosed a busy runner and caused a kill/reload loop.
+PROBE_STATE=/tmp/mcft_ollama_probe_fails
 if lsof -nP -iTCP:11434 -sTCP:LISTEN >/dev/null 2>&1; then
-    probe=$(curl -s -m 120 http://localhost:11434/api/generate \
-        -d '{"model": "qwen3.6:35b", "prompt": "hi", "stream": false, "options": {"num_predict": 1}}' 2>/dev/null)
-    if ! echo "$probe" | grep -q '"done"'; then
-        echo "$(ts) ollama probe failed; killing wedged runner" >> "$LOG"
-        pkill -f "ollama runner" 2>/dev/null
+    probe=$(curl -s -m 290 http://localhost:11434/api/generate \
+        -d '{"model": "qwen3.6:35b", "prompt": "hi", "stream": false, "keep_alive": -1, "options": {"num_predict": 1}}' 2>/dev/null)
+    if echo "$probe" | grep -q '"done"'; then
+        rm -f "$PROBE_STATE"
+    else
+        fails=$(( $(cat "$PROBE_STATE" 2>/dev/null || echo 0) + 1 ))
+        echo "$fails" > "$PROBE_STATE"
+        echo "$(ts) ollama probe failed ($fails consecutive)" >> "$LOG"
+        if (( fails >= 2 )); then
+            echo "$(ts) killing wedged ollama runner" >> "$LOG"
+            pkill -f "ollama runner" 2>/dev/null
+            rm -f "$PROBE_STATE"
+        fi
     fi
 else
     echo "$(ts) ollama serve not listening; relaunching app" >> "$LOG"
