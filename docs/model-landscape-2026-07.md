@@ -1,76 +1,130 @@
-# Model landscape for Minecraft agents — July 2026
+# Model landscape for Minecraft agents — July 2026 (v2, subagent-validated)
 
-Research snapshot for teacher/student selection (sources: MineExplorer
-arXiv:2605.30931, MineNPC-Task arXiv:2601.05215, Mindcraft-CE/Andy HF
-cards, Artificial Analysis index reporting, provider announcements).
+Research snapshot for teacher/student selection. v1 claims were independently
+re-verified by three research subagents on 2026-07-20 against primary sources
+(license texts, provider ToS, HF cards, llama.cpp/Ollama PRs, arXiv). Full
+reports: `validation-teacher-2026-07.md`, `validation-student-2026-07.md`,
+`validation-landscape-2026-07.md`. Corrections from validation are marked
+**[corrected]**.
 
 ## 1. Minecraft-agent SOTA
 
-- **MineExplorer** (Meituan, 2026) is the current open-world benchmark for
-  Minecraft MLLM agents. Best performers: Claude Opus 4.6 (~78) and
-  Gemini 3.1 Pro; ALL models degrade sharply on multi-hop tasks with
-  hidden prerequisites. Larger models/thinking modes do NOT consistently
-  help. (Vision-based; our stack is text-state, so directional only.)
-- **MineNPC-Task** (2026): memory-aware co-play benchmark; ~33% subtask
-  failure for GPT-4o-class agents; identifies memory scaffolding as the
-  binding constraint — which matches our observed failure modes and
-  validates the journal/site-anchor/chest investment.
-- Research takeaway: **scaffolding quality rivals model quality** on
-  long-horizon Minecraft play. Nobody has solved multi-hop; a stable
-  harness + curated data is a real edge, not a consolation prize.
+- **MineExplorer** (Meituan, arXiv 2605.30931): Claude Opus 4.6 best (77.7
+  single-hop), Gemini 3.1 Pro second (74.2); ALL models collapse on multi-hop
+  (best 23.9). "Larger models or thinking modes do not consistently translate
+  into better performance" (verbatim). **[corrected]** It evaluates vision
+  MLLMs only and explicitly excludes text-only models — it is NOT a runnable
+  target for our stack. Our published comparisons should be **MineCollab**
+  (native to the Mindcraft codebase) and **MCU-Turbo** (CraftJarvis).
+- **MineNPC-Task** (arXiv 2601.05215): ~33% subtask failure, but
+  **[corrected]** that is a GPT-4o-only snapshot with no ablations — use it as
+  a failure taxonomy (code execution, inventory, referencing, navigation),
+  not a SOTA number. Memory-scaffolding need is hedged in the paper, though it
+  still matches our observed failure modes.
+- **Cooperation literature** (MineCollab, PillagerBench, VillagerAgent,
+  MineLand, Project Sid): converges on **communication efficiency as the
+  binding constraint** (~15% drop when agents must communicate detailed
+  plans). Key result for us: MineCollab's fine-tuned LLaMA-8B-SFT (0.23)
+  nearly matched LLaMA-70B prompted (0.24) — direct published support for the
+  distill-a-small-model plan. Make **inter-bot message economy an explicit
+  eval metric**.
+- Research takeaway unchanged: **scaffolding quality rivals model quality**;
+  nobody has solved multi-hop; a stable harness + curated data is a real edge.
 
-## 2. The Andy line (closest competitor)
+## 2. Competitive landscape
 
-- Andy-4.2: 9B, **Qwen3.5 base**, trained on **2,748 examples** in 5 GPU
-  hours (QLoRA 4-bit + 8-bit QAT, single 3090). First local model to get
-  full diamond armor unattended. Documented weakness: building/newAction
-  (token spirals). Andy-5 planned on a new base family.
-- Implication: our corpus (17.9k raw steps after 3 days; targeting
-  10-50k *curated* steps) is 5-20x Andy's dataset. Their own retro:
-  "collect better training data" — exactly the mcft thesis.
+- **Andy-4.2** (validated in full): 9B on Qwen3.5, 2,748 examples, 5 GPU-hours
+  (QLoRA 4-bit + 8-bit QAT, one 3090). First local model to full diamond armor
+  unattended. Weakness verbatim: !newAction "would produce thousands and
+  thousands of tokens, but never do anything." Their stated next step:
+  "collect better training data" — the mcft thesis. **No other serious
+  Mindcraft fine-tune exists.**
+- **Prior art for the show** **[new]**: crypto projects **ClaudeCraft** (three
+  Claude bots co-building 24/7, $CRAFT memecoin, viewer bounties — now
+  apparently defunct) and **CLAUDEMINE** ($MINE, single-agent Kick stream)
+  partially occupy "paid viewer influence over AI builders." Neuro-sama
+  remains the only large monetized AI streamer in Minecraft (one persona,
+  plays with humans). Open-source copycat risk: JesseRWeigel's
+  minecraft-agent-swarm (multi-bot, local LLM, Twitch !goal/!vote, OBS/TTS).
+  **Differentiation thesis: qualified but intact** — the unoccupied slot is
+  platform-native monetization + steerable personas + measured reliability.
+- **Willingness to pay is proven** **[new]**: MinePal ($2.99-13.99/mo,
+  Mindcraft-lineage) and NeverPlayAlone (hosted AI worlds, $9-29/mo) are
+  shipping companion/hosting products.
+- Upstream framework renamed: mindcraft-bots/mindcraft (5.5k stars, MIT);
+  mindcraft-ce is the active community fork. Still the dominant scaffold.
 
 ## 3. Teacher candidates
 
-| Model | Class | Agentic standing | $/MTok in/out | Distill-OK? |
+| Model | Class | Agentic standing | $/MTok in/out | Distill lane |
 |---|---|---|---|---|
-| Claude Fable 5 | closed | AA Index #1 (60); best hard coding/judgment | $10/$50 | No (personal-use lane only) |
-| GPT-5.6 Sol | closed | Agents' Last Exam #1 (53.6, +13 over Fable); best $/agent-run | $5/$30 | No |
-| Gemini 3.1 Pro | closed | strong MineExplorer; 2M ctx; weak agentic-coding index | ~$2.50 | No |
-| **Kimi K3** | **open (weights 2026-07-27)** | AA ~57, **#3 overall** — within 3 pts of Fable 5 | API now; self-host later | **Yes** |
-| GLM-5.2 | open (MIT) | top open-weight deployable today; agentic-focused | cheap API / self-host | Yes |
-| DeepSeek V4 Pro | open (MIT) | best price/perf (~$0.04/task) | ~$0.44/$0.87 | Yes |
-| qwen3.6:35b local (current) | open | mid-tier; free; validated in our harness | $0 | Yes |
+| DeepSeek V4 Pro | open (MIT) | mid-frontier; Vending-Bench 2 mid-pack | $0.435/$0.87 | **Only API with an explicit written distillation grant** ("training other models (such as model distillation)" permitted, ToS 4.2) |
+| GLM-5.2 | open (MIT) | best open on Vending-Bench 2 ($8.3k) + AA open-weight #1 | self-host or 3rd-party host | **[corrected]** Z.ai API bans ALL external-model training — MIT weights clean, so **self-host only** |
+| Kimi K3 | open? (weights promised 07-27) | AA 57.1, #3 family; #1 AutomationBench-AA | $3/$15 API | **[corrected]** License NOT yet announced ("Modified MIT" was speculation); API ToS has a broad competitive-use ban and no distillation grant. **Wait for the actual LICENSE file.** |
+| Nemotron 3 Ultra **[new]** | open (OpenMDW-1.1) | agent-focused 550B/55B-active; trails GLM-5.2 | self-host | **Most distillation-friendly license in existence** — zero output restrictions, explicitly permits competing models; NVIDIA ships training data + recipes |
+| Inkling (Thinking Machines) **[new]** | open (Apache 2.0) | AA ~41; MCP Atlas 74.1% | self-host / Tinker | Clean (Apache 2.0); leading US open-weights option |
+| Claude Fable 5 | closed | AA #1 (59.9) BUT **[corrected]** underperforms on Vending-Bench 2 long-horizon coherence at every reasoning effort (~$4.3-5.7k vs Opus 4.7's $10.9k) | $10/$50 | No — and the clause is keyed to "competing," **not conditioned on commercial use** |
+| GPT-5.6 Sol | closed | Agents' Last Exam #1 (52.7 table / 53.6 max-config); τ³-Banking #1 | $5/$30 | No (same competing-model clause) |
+| Gemini 3.1 Pro | closed | **[corrected]** $2.00/MTok in, 1M ctx (not $2.50/2M); weak agentic indexes | $2/$12 | No |
+| qwen3.6:35b local (current) | open (Apache 2.0) | mid-tier; free; validated in our harness | $0 | Yes |
 
-**Headline: the open/closed gap has nearly closed.** Kimi K3 sits between
-GPT-5.6 Sol and Opus 4.8 on independent indexes and its weights land
-July 27. A frontier-class, distillation-permissive teacher now exists.
+**Revised headline:** the open/closed gap has nearly closed, but the two
+"clean-teacher" bets shifted under validation. K3 is unproven AND unlicensed
+until 07-27; the deployable-today clean lanes are **DeepSeek V4 Pro via API**
+(explicit grant, cheapest) and **GLM-5.2 self-hosted** (best open long-horizon
+coherence, but requires ~40B-active serving infra). Fable 5 lost its teacher
+case twice over: ToS applies regardless of monetization, and it is empirically
+weak at exactly the capability we need (long-horizon coherence).
 
 ## 4. Student candidates
 
-| Model | Size | Notes |
-|---|---|---|
-| Qwen3.5-9B | 9B dense | Andy-4.2's base — proven for this exact task; Apache 2.0 |
-| Qwen3.6 small tier | 0.8-9B | newer gen "optimized for agentic workflows"; Apache 2.0 |
-| Gemma 4 12B | 12B dense | best VRAM/$ (6.8GB Q4); Unsloth first-class; QAT variants ship official |
-| Gemma 4 26B-A4B | MoE, 4B active | 120 tok/s on 12GB GPU w/ QAT+MTP; strong show-latency choice |
-| Qwen3.6-35B-A3B | MoE, 3B active | our current teacher; 73.4% SWE-V at 3B active; could be its own student |
+| Model | Size | License | Notes |
+|---|---|---|---|
+| Qwen3.5-9B | 9B hybrid (Gated DeltaNet) | Apache 2.0 | Andy-4.2's base — proven for this task. **[corrected]** Unsloth advises bf16 LoRA, NOT QLoRA (hybrid-arch quant error); ~22GB to train. ~61 tok/s Q4 GGUF on M4 Max |
+| Gemma 4 12B | 12B dense | **[corrected] Apache 2.0** (first Gemma under OSI license — old "Gemma Terms" fear is void) | 6.7GB Q4 weights; first-class Unsloth QLoRA; official QAT variants |
+| Ministral 3 8B/14B **[new]** | dense | Apache 2.0 | Explicitly built by "Cascade Distillation" as student models; native function calling; painless QLoRA; ~98/58 tok/s on Apple Silicon. Use Instruct variants |
+| Qwen3.5-4B | 4B | Apache 2.0 | Cheap ablation; distil-labs benchmark ranks Qwen3-4B-class #2 student overall |
+| Gemma 4 26B-A4B | MoE 3.8B active | Apache 2.0 | **[corrected]** DEMOTED to inference-only: LoRA needs >40GB, QLoRA not recommended on the MoE. ~100 tok/s (not 120) on 12GB w/ QAT+MTP, f16 KV required |
+| ~~Qwen3.6 small tier~~ | — | — | **[corrected] Does not exist.** Qwen3.6 = 27B dense + 35B-A3B only |
 
-Community signal: Qwen3.5-9B beats Gemma 4 12B on 5 of 8 benchmarks;
-Gemma's edge is deployment tooling. Both QLoRA on 24GB; both export GGUF.
+Also on radar: Nemotron 3 Nano 30B-A3B (agentic specialist, ~20GB Q4 — fine on
+the Studio, marginal on consumer GPUs).
 
-## 5. Recommendation
+Distillation-student evidence **[new]**: distil-labs' 15-model benchmark has
+the Qwen3 family #1-2 as fine-tuning students for tool calling; SOD
+(arXiv 2605.07725) and SmartAD (ACL 2026) both say up-weight action/decision
+spans over reasoning spans and prefer divergence-weighted distillation;
+include "no-tool" negatives to preserve refusal behavior; fine-tune Instruct,
+not Base.
 
-1. **Now**: keep qwen3.6:35b as the scaffolding-era driver (free,
-   validated). Finish clean-run baseline.
-2. **Teacher, commercial-optional lane**: adopt **Kimi K3** when weights/
-   API access settle (post-07-27); GLM-5.2 as the deployable-today
-   fallback; DeepSeek V4 for volume. All provenance-tagged.
-3. **Teacher, personal showpiece lane**: Fable 5 for judgment-heavy
-   scenario sessions; note GPT-5.6 Sol wins pure agent-run benchmarks at
-   ~1/4 the cost if we add a second closed lane.
-4. **Judge/filter**: Sonnet 5 batch (~$1.25/day) or DeepSeek V4 Flash.
-5. **Student**: shortlist Qwen3.5-9B (Andy parity), Qwen3.6-9B-class, and
-   Gemma 4 12B/26B-A4B. Decide by (a) tokens/sec on the Studio at our
-   16k ctx, (b) Unsloth QLoRA run cost, (c) eval-battery scores after a
-   pilot fine-tune on ~5k curated steps. QAT before GGUF export (Andy
-   validated this path).
+Mac deployment note **[corrected]**: do NOT budget MTP speedups via
+llama.cpp/GGUF on Apple Silicon (currently a net slowdown on Metal); plain
+GGUF or Ollama's MLX path (Gemma 4 MTP ~1.9x there) are the realistic routes.
+On NVIDIA, MTP delivers >=2x as advertised.
+
+## 5. Recommendation (revised after validation)
+
+1. **Now**: keep qwen3.6:35b as the scaffolding-era driver (free, validated).
+   Finish clean-run baseline.
+2. **Teacher, default clean lane**: **DeepSeek V4 Pro API** — the only
+   provider with an explicit written distillation grant, at $0.435/$0.87.
+   Provenance-tag everything.
+3. **Teacher, quality clean lane**: **GLM-5.2 self-hosted** (rented GPU or
+   MIT-licensed third-party host; NEVER the Z.ai API) — best open-weight
+   long-horizon coherence on record.
+4. **Kimi K3**: hold until weights + actual LICENSE ship (promised 07-27),
+   then re-evaluate. Do not run K3-teacher datagen through Moonshot's API.
+5. **Fable/GPT lane**: demoted from "teacher" to **judge/curator and
+   scenario-writer** duties. Rationale: closed-model ToS bans are not
+   conditioned on commercial use, and Fable 5 measurably underperforms on
+   long-horizon coherence. Sonnet 5 batch (~$1.25/day) or DeepSeek V4 Flash
+   for the judge/filter lane.
+6. **Student**: shortlist **Qwen3.5-9B** (bf16 LoRA), **Gemma 4 12B** (QLoRA),
+   **Ministral 3 8B** (QLoRA) — all Apache 2.0. Decide by (a) tok/s on the
+   Studio at 16k ctx, (b) fine-tune run cost (~$5-30/run on rented GPU, hours
+   not days), (c) eval-battery scores after a pilot fine-tune on ~5k curated
+   steps. QAT before GGUF export (Andy validated this path).
+7. **SFT recipe adjustments**: up-weight action-emission spans, include
+   no-tool negatives, train on Instruct bases, and track inter-bot message
+   economy as a first-class eval metric (MineCollab shows 8B-SFT can match
+   70B-prompted on cooperation).
