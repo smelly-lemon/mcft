@@ -16,39 +16,65 @@ if ! lsof -nP -iTCP:25566 -sTCP:LISTEN >/dev/null 2>&1; then
     exit 0
 fi
 
-# Brain check: Ollama must answer a 1-token completion. Busy is NOT wedged
-# (agent requests queue ahead of the probe), so allow one slow/failed probe.
-# Escalation ladder learned from the 07-19 wedges: killing just the runner
-# does NOT heal a wedged serve (18:40/19:00 kills changed nothing; serve
-# stopped logging requests entirely). 2 fails -> kill runner; 3+ fails ->
-# full app restart + async preload. Counter resets only on probe success.
+# Brain check, v4. Passive first: a 200 on /api/chat in the last 10 min in
+# the newest server log means the brain demonstrably works - no probe needed.
+# Active probe (only when bots are idle or failing) MUST use the same
+# num_ctx as the agents: the v3 probe used the default context size, which
+# demands a second runner instance that can never load under agent traffic,
+# so every probe starved and false-alarmed (07-19 19:44-20:24), and the
+# forced context-swap pressure is itself a suspected wedge trigger.
+# Escalation: 2 fails -> kill runner; 3+ -> real app restart (quit the
+# menu-bar supervisor too - bare killall gets respawned instantly).
 PROBE_STATE=/tmp/mcft_ollama_probe_fails
-PRELOAD='{"model": "qwen3.6:35b", "prompt": "hi", "stream": false, "keep_alive": -1, "options": {"num_predict": 1}}'
+PROBE_BODY='{"model": "qwen3.6:35b", "messages": [{"role": "user", "content": "hi"}], "stream": false, "keep_alive": -1, "options": {"num_predict": 1, "num_ctx": 16384}}'
+
+ollama_restart() {
+    osascript -e 'quit app "Ollama"' >/dev/null 2>&1
+    pkill -f "Ollama.app" 2>/dev/null
+    pkill -f "ollama serve" 2>/dev/null
+    sleep 5
+    pkill -9 -f "ollama serve" 2>/dev/null
+    open -ga Ollama
+    sleep 10
+    (curl -s -m 240 http://localhost:11434/api/chat -d "$PROBE_BODY" >/dev/null 2>&1 &)
+}
+
 if lsof -nP -iTCP:11434 -sTCP:LISTEN >/dev/null 2>&1; then
-    probe=$(curl -s -m 290 http://localhost:11434/api/generate -d "$PRELOAD" 2>/dev/null)
-    if echo "$probe" | grep -q '"done"'; then
+    brain_ok=0
+    newest_log=$(ls -t "$HOME"/.ollama/logs/server*.log 2>/dev/null | head -1)
+    if [[ -n "$newest_log" ]]; then
+        last_ok=$(tail -300 "$newest_log" | grep ' 200 ' | grep 'api/chat' | tail -1 \
+            | sed -E 's|^\[GIN\] ([0-9/]+ - [0-9:]+).*|\1|')
+        if [[ -n "$last_ok" ]]; then
+            last_epoch=$(date -j -f "%Y/%m/%d - %H:%M:%S" "$last_ok" +%s 2>/dev/null)
+            if [[ -n "$last_epoch" ]] && (( $(date +%s) - last_epoch < 600 )); then
+                brain_ok=1
+            fi
+        fi
+    fi
+    if (( ! brain_ok )); then
+        probe=$(curl -s -m 290 http://localhost:11434/api/chat -d "$PROBE_BODY" 2>/dev/null)
+        echo "$probe" | grep -q '"done"' && brain_ok=1
+    fi
+    if (( brain_ok )); then
         rm -f "$PROBE_STATE"
     else
         fails=$(( $(cat "$PROBE_STATE" 2>/dev/null || echo 0) + 1 ))
         echo "$fails" > "$PROBE_STATE"
-        echo "$(ts) ollama probe failed ($fails consecutive)" >> "$LOG"
+        echo "$(ts) ollama brain check failed ($fails consecutive)" >> "$LOG"
         if (( fails == 2 )); then
             echo "$(ts) killing wedged ollama runner" >> "$LOG"
             pkill -f "ollama runner" 2>/dev/null
         elif (( fails >= 3 )); then
-            echo "$(ts) runner kill did not heal; full ollama app restart" >> "$LOG"
-            killall ollama 2>/dev/null
-            sleep 5
-            open -ga Ollama
-            sleep 10
-            (curl -s -m 240 http://localhost:11434/api/generate -d "$PRELOAD" >/dev/null 2>&1 &)
+            echo "$(ts) full ollama app restart" >> "$LOG"
+            ollama_restart
         fi
     fi
 else
     echo "$(ts) ollama serve not listening; relaunching app" >> "$LOG"
     open -ga Ollama
     sleep 10
-    (curl -s -m 240 http://localhost:11434/api/generate -d "$PRELOAD" >/dev/null 2>&1 &)
+    (curl -s -m 240 http://localhost:11434/api/chat -d "$PROBE_BODY" >/dev/null 2>&1 &)
 fi
 
 # Both agents must be running: Mindcraft's "exited too quickly and will not
