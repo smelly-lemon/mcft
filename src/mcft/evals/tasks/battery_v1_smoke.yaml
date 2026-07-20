@@ -1,0 +1,166 @@
+# Battery v1 SMOKE SET: 6 tasks, 1 seed, ~1.5h (docs/eval-battery-design.md).
+# Every task maps to an observed wild-corpus failure, not a hypothetical.
+# Placeholders: {bot}, {ax}/{ay}/{az} arena origin (+ integer offsets).
+version: 1
+tasks:
+  - id: collect_wood
+    name: Collect 10 logs
+    dimension: execution
+    arena: natural
+    budget_minutes: 10
+    goal_prompt: >-
+      Collect at least 10 logs of any type. Nothing else matters right now.
+    milestones:
+      - id: logs_10
+        weight: 1.0
+        checker: {kind: inventory_at_least, params: {item_pattern: "_log", count: 10}}
+
+  - id: charcoal_bootstrap
+    name: Charcoal bootstrap to iron
+    dimension: execution
+    arena: natural
+    budget_minutes: 12
+    setup:
+      - "clear {bot}"
+      - "give {bot} oak_log 16"
+      - "give {bot} iron_ore 3"
+      - "give {bot} stone_pickaxe 1"
+    goal_prompt: >-
+      You have logs, raw iron ore, and a stone pickaxe - but NO coal anywhere.
+      Produce at least 8 charcoal, then smelt at least 1 iron ingot.
+      Remember: charcoal is made by smelting logs, and planks can fuel the
+      first smelt.
+    milestones:
+      - id: charcoal_8
+        weight: 0.5
+        checker: {kind: inventory_at_least, params: {item_pattern: "charcoal", count: 8}}
+      - id: iron_ingot_1
+        weight: 0.5
+        checker: {kind: inventory_at_least, params: {item_pattern: "iron_ingot", count: 1}}
+    notes: E2 failure class - bots tried to smelt coal_ore and stalled.
+
+  - id: build_wall_spec
+    name: Build a 5x3 wall to spec
+    dimension: execution
+    arena: flat
+    budget_minutes: 10
+    setup:
+      - "clear {bot}"
+      - "give {bot} cobblestone 30"
+    goal_prompt: >-
+      Build a wall of cobblestone exactly 5 blocks wide and 3 blocks tall.
+      The bottom-left block goes at ({ax}, {ay}, {az}) and the wall runs
+      toward positive X. Place all 15 blocks.
+    milestones:
+      - id: wall_third
+        weight: 0.25
+        checker:
+          kind: block_region_scan
+          params:
+            region: {from: ["{ax}", "{ay}", "{az}"], to: ["{ax+4}", "{ay+2}", "{az}"], block: cobblestone}
+            min_fraction: 0.34
+      - id: wall_two_thirds
+        weight: 0.25
+        checker:
+          kind: block_region_scan
+          params:
+            region: {from: ["{ax}", "{ay}", "{az}"], to: ["{ax+4}", "{ay+2}", "{az}"], block: cobblestone}
+            min_fraction: 0.67
+      - id: wall_complete
+        weight: 0.5
+        checker:
+          kind: block_region_scan
+          params:
+            region: {from: ["{ax}", "{ay}", "{az}"], to: ["{ax+4}", "{ay+2}", "{az}"], block: cobblestone}
+            min_fraction: 1.0
+    notes: replaces the v0 judge-checked shelter with an objective scan.
+
+  - id: site_resupply
+    name: Mine 32 cobble and deposit at site
+    dimension: long_horizon
+    arena: natural
+    budget_minutes: 40
+    setup:
+      - "clear {bot}"
+      - "give {bot} stone_pickaxe 1"
+      - "setblock {ax} {ay} {az+2} chest"
+    goal_prompt: >-
+      The site chest is at ({ax}, {ay}, {az+2}). Mine at least 32 cobblestone
+      from underground, then RETURN to the site and deposit all of it in the
+      chest. The job is only done when the cobblestone is in the chest.
+    milestones:
+      - id: mined_32
+        weight: 0.3
+        checker: {kind: inventory_at_least, params: {item_pattern: "cobblestone", count: 32}}
+      - id: returned_to_site
+        weight: 0.3
+        checker: {kind: position_within, params: {x: "{ax}", y: "{ay}", z: "{az}", radius: 8, min_y: "{ay-3}"}}
+      - id: chest_stocked
+        weight: 0.4
+        checker: {kind: chest_contains, params: {x: "{ax}", y: "{ay}", z: "{az+2}", item_pattern: "cobblestone", count: 32}}
+    notes: the 2026-07-20 Sable failure as a test (mined, never returned).
+
+  - id: pit_trap
+    name: Escape a pit and resume
+    dimension: unstuck
+    arena: natural
+    budget_minutes: 15
+    setup:
+      - "fill {ax+8} {ay-2} {az+8} {ax+8} {ay-1} {az+8} air"
+    goal_prompt: >-
+      Collect at least 10 logs of any type. Nothing else matters right now.
+    perturbations:
+      - at_minutes: 2
+        commands: ["tp {bot} {ax+8} {ay-2} {az+8}"]
+        note: drop the bot into a 2-deep pit mid-task
+    milestones:
+      - id: escaped_pit
+        weight: 0.4
+        checker: {kind: position_within, params: {x: "{ax+8}", y: "{ay}", z: "{az+8}", radius: 40, min_y: "{ay-1}"}}
+      - id: logs_10
+        weight: 0.6
+        checker: {kind: inventory_at_least, params: {item_pattern: "_log", count: 10}}
+    notes: >-
+      escaped_pit latches only after the perturbation fires (runner rule:
+      milestones are polled post-perturbation for unstuck tasks).
+
+  - id: chest_relay
+    name: Cooperative wall via chest relay
+    dimension: cooperation
+    arena: flat
+    pair: true
+    budget_minutes: 30
+    setup:
+      - "setblock {ax} {ay} {az+2} chest"
+      - "clear {bot}"
+    goal_prompt: >-
+      TEAM TASK. One of you ONLY gathers cobblestone and deposits it in the
+      chest at ({ax}, {ay}, {az+2}); the other ONLY builds, withdrawing from
+      that chest. Build a cobblestone wall 5 wide and 3 tall with its
+      bottom-left block at ({ax+3}, {ay}, {az}), running toward positive X.
+      Never hand items directly - the chest is the handoff point.
+    milestones:
+      - id: wall_third
+        weight: 0.3
+        checker:
+          kind: block_region_scan
+          params:
+            region: {from: ["{ax+3}", "{ay}", "{az}"], to: ["{ax+7}", "{ay+2}", "{az}"], block: cobblestone}
+            min_fraction: 0.34
+      - id: wall_two_thirds
+        weight: 0.3
+        checker:
+          kind: block_region_scan
+          params:
+            region: {from: ["{ax+3}", "{ay}", "{az}"], to: ["{ax+7}", "{ay+2}", "{az}"], block: cobblestone}
+            min_fraction: 0.67
+      - id: wall_complete
+        weight: 0.4
+        checker:
+          kind: block_region_scan
+          params:
+            region: {from: ["{ax+3}", "{ay}", "{az}"], to: ["{ax+7}", "{ay+2}", "{az}"], block: cobblestone}
+            min_fraction: 1.0
+    notes: >-
+      chest-vs-givePlayer transfer share is an Economy meter from
+      steps.jsonl, not an end-state milestone.

@@ -26,7 +26,19 @@ fi
 # Escalation: 2 fails -> kill runner; 3+ -> real app restart (quit the
 # menu-bar supervisor too - bare killall gets respawned instantly).
 PROBE_STATE=/tmp/mcft_ollama_probe_fails
-PROBE_BODY='{"model": "qwen3.6:35b", "messages": [{"role": "user", "content": "hi"}], "stream": false, "keep_alive": -1, "options": {"num_predict": 1, "num_ctx": 16384}}'
+
+# Probe model/ctx read from the deployed profile so model swaps (era bumps,
+# Phase 4 bake-offs) can't desync the probe from agent traffic - a probe on
+# the wrong model/ctx loads a second runner and false-alarms (07-19 lesson).
+read -r PROBE_MODEL PROBE_CTX <<< "$(python3 -c "
+import json
+p = json.load(open('$MINDCRAFT_DIR/profiles/sable.json'))
+m = p.get('model', {})
+print(m.get('model', 'qwen3.6:35b'), m.get('params', {}).get('options', {}).get('num_ctx', 16384))
+" 2>/dev/null)"
+PROBE_MODEL=${PROBE_MODEL:-qwen3.6:35b}
+PROBE_CTX=${PROBE_CTX:-16384}
+PROBE_BODY='{"model": "'$PROBE_MODEL'", "messages": [{"role": "user", "content": "hi"}], "stream": false, "keep_alive": -1, "options": {"num_predict": 1, "num_ctx": '$PROBE_CTX'}}'
 
 ollama_restart() {
     osascript -e 'quit app "Ollama"' >/dev/null 2>&1
