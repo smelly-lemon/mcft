@@ -40,6 +40,9 @@ class IntentNode(StrictModel):
     created_at: str = Field(default_factory=lambda: utc_now().isoformat())
     # values only: per-persona weights, e.g. {"sable": 0.8}
     weights: dict[str, float] = Field(default_factory=dict)
+    # goals/tasks: how much this node serves each value, e.g. {"safety": 0.8}.
+    # This is the steering surface: alignment(bot, node) ranks sibling choices.
+    serves_values: dict[str, float] = Field(default_factory=dict)
     status_reason: str = ""
 
 
@@ -134,6 +137,25 @@ class IntentGraph(BaseModel):
         ]
         vals.sort(key=lambda t: -t[1])
         return vals[:top]
+
+    def alignment(self, persona: str, node_id: str) -> float:
+        """How well a goal serves this persona's values (the steering signal).
+
+        Sums persona_weight * serves_values over the node and its ancestors
+        (nearer nodes count fully, ancestors half) so tasks inherit purpose.
+        """
+        by_title = {
+            n.title: n.weights.get(persona, 0.0)
+            for n in self.nodes.values()
+            if n.kind == "value"
+        }
+        score = 0.0
+        chain = [n for n in self.path(node_id) if n.kind != "value"]
+        for i, node in enumerate(reversed(chain)):
+            factor = 1.0 if i == 0 else 0.5
+            for value_title, serve in node.serves_values.items():
+                score += factor * serve * by_title.get(value_title, 0.0)
+        return score
 
     # -- ops (the model-facing surface) -------------------------------------
 
@@ -281,7 +303,10 @@ class IntentGraph(BaseModel):
                 sibs = [
                     c for c in self.children(parent)
                     if c.id != node_id and c.status == "active"
-                ][:max_siblings]
+                ]
+                # steering: siblings most aligned with this persona's values first
+                sibs.sort(key=lambda s: -self.alignment(bot, s.id))
+                sibs = sibs[:max_siblings]
                 if sibs:
                     lines.append(
                         "Alternatives serving the same parent: "

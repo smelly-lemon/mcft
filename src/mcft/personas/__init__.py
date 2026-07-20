@@ -26,6 +26,8 @@ class Persona(StrictModel):
     voice: str
     chat_style: list[str]
     boundaries: list[str]
+    # Weights over shared intent-graph value nodes (the steering surface).
+    values: dict[str, float] = {}
 
 
 def load_persona(path: Path) -> Persona:

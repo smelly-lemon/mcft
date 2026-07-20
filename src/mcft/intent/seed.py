@@ -35,14 +35,39 @@ def seed_homestead(site: Coords, personas: dict[str, dict[str, float]]) -> Inten
     )
 
     phases = [
-        ("walls", "finish the house walls", "shelter comes before everything else"),
-        ("roof", "flat roof over the house", "a house without a roof is a pen"),
-        ("door", "hang the front door", "keep the night outside"),
-        ("farm", "wheat farm within 10 blocks", "food security ends the scavenging"),
-        ("improve", "torches, fences, decorations", "make it a home, not a box"),
+        (
+            "walls", "finish the house walls",
+            "shelter comes before everything else",
+            {"safety": 0.9, "craftsmanship": 0.5},
+        ),
+        (
+            "roof", "flat roof over the house",
+            "a house without a roof is a pen",
+            {"safety": 0.7, "craftsmanship": 0.7},
+        ),
+        (
+            "door", "hang the front door",
+            "keep the night outside",
+            {"safety": 0.8, "craftsmanship": 0.3},
+        ),
+        (
+            "farm", "wheat farm within 10 blocks",
+            "food security ends the scavenging",
+            {"teamwork": 0.6, "craftsmanship": 0.4},
+        ),
+        (
+            "improve", "torches, fences, decorations",
+            "make it a home, not a box",
+            {"spectacle": 0.8, "craftsmanship": 0.8},
+        ),
     ]
-    for node_id, title, why in phases:
-        g.add(IntentNode(id=node_id, kind="goal", title=title, why=why, parent=root.id))
+    for node_id, title, why, serves in phases:
+        g.add(
+            IntentNode(
+                id=node_id, kind="goal", title=title, why=why,
+                parent=root.id, serves_values=serves,
+            )
+        )
 
     for persona in personas:
         g.active[persona] = "walls"

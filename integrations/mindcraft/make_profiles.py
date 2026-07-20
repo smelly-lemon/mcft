@@ -70,11 +70,20 @@ TEAMWORK - THE SITE CHEST IS THE HANDOFF POINT (re-read every turn):
 
 YOUR JOURNAL (this is your ONLY long-term memory - everything not written here is forgotten):
 '$MEMORY'
-
+{intent_section}
 $STATS
 $INVENTORY
 $COMMAND_DOCS
 Conversation Begin:"""
+
+# Era F (intent graph): the INTENT section shows the active goal path with
+# whys; the three !goal commands are the model's only way to mutate it.
+INTENT_SECTION = """
+$INTENT
+Your INTENT above is your goal tree: work the NOW goal. When it is truly
+finished use !goalDone; if you are blocked or see something more urgent,
+!goalSwitch to an alternative or !goalAdd a subgoal (always with a real why).
+"""
 
 SAVING_MEMORY_TEMPLATE = """\
 [[JOURNAL]] You are $NAME, a Minecraft bot on a long-running project. The text below is your \
@@ -112,7 +121,9 @@ MODES = {
 }
 
 
-def render_profile(persona: Persona, model: str, embedding: str, site: str) -> dict:
+def render_profile(
+    persona: Persona, model: str, embedding: str, site: str, intent: bool = False
+) -> dict:
     style = "\n".join(f"- {rule}" for rule in persona.chat_style)
     boundaries = "\n".join(f"- {rule}" for rule in persona.boundaries)
     return {
@@ -135,7 +146,11 @@ def render_profile(persona: Persona, model: str, embedding: str, site: str) -> d
         },
         "embedding": embedding,
         "conversing": CONVERSING_TEMPLATE.format(
-            voice=persona.voice.strip(), style=style, boundaries=boundaries, site=site
+            voice=persona.voice.strip(),
+            style=style,
+            boundaries=boundaries,
+            site=site,
+            intent_section=INTENT_SECTION if intent else "",
         ),
         "modes": MODES,
         "cooldown": 1500,
@@ -150,13 +165,19 @@ def main() -> None:
     parser.add_argument("--model", default="qwen3.6:35b")
     parser.add_argument("--embedding", default="ollama/qwen3-embedding:0.6b")
     parser.add_argument("--site", default="(95, 85, -283)", help="home site coordinates")
+    parser.add_argument(
+        "--intent", action="store_true",
+        help="era F: include the $INTENT section (requires settings.mcft_intent)",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     personas = load_all_personas(Path(args.persona_dir))
     for persona in personas.values():
-        profile = render_profile(persona, args.model, args.embedding, args.site)
+        profile = render_profile(
+            persona, args.model, args.embedding, args.site, intent=args.intent
+        )
         path = out_dir / f"{persona.id}.json"
         path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {path}")

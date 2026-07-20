@@ -1,0 +1,189 @@
+{
+ "nodes": {
+  "val_crafts": {
+   "id": "val_crafts",
+   "kind": "value",
+   "title": "craftsmanship",
+   "why": "",
+   "parent": null,
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205272+00:00",
+   "weights": {
+    "sable": 0.9,
+    "jolt": 0.2
+   },
+   "serves_values": {},
+   "status_reason": ""
+  },
+  "val_safety": {
+   "id": "val_safety",
+   "kind": "value",
+   "title": "safety",
+   "why": "",
+   "parent": null,
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205444+00:00",
+   "weights": {
+    "sable": 0.6,
+    "jolt": 0.3
+   },
+   "serves_values": {},
+   "status_reason": ""
+  },
+  "val_specta": {
+   "id": "val_specta",
+   "kind": "value",
+   "title": "spectacle",
+   "why": "",
+   "parent": null,
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205449+00:00",
+   "weights": {
+    "sable": 0.1,
+    "jolt": 0.9
+   },
+   "serves_values": {},
+   "status_reason": ""
+  },
+  "val_teamwo": {
+   "id": "val_teamwo",
+   "kind": "value",
+   "title": "teamwork",
+   "why": "",
+   "parent": null,
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205453+00:00",
+   "weights": {
+    "sable": 0.5,
+    "jolt": 0.7
+   },
+   "serves_values": {},
+   "status_reason": ""
+  },
+  "homestead": {
+   "id": "homestead",
+   "kind": "goal",
+   "title": "a permanent team homestead",
+   "why": "a home base makes every future adventure possible - and it's ours",
+   "parent": null,
+   "status": "active",
+   "owner": "shared",
+   "anchor": [
+    0,
+    86,
+    64
+   ],
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205461+00:00",
+   "weights": {},
+   "serves_values": {},
+   "status_reason": ""
+  },
+  "walls": {
+   "id": "walls",
+   "kind": "goal",
+   "title": "finish the house walls",
+   "why": "shelter comes before everything else",
+   "parent": "homestead",
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205467+00:00",
+   "weights": {},
+   "serves_values": {
+    "safety": 0.9,
+    "craftsmanship": 0.5
+   },
+   "status_reason": ""
+  },
+  "roof": {
+   "id": "roof",
+   "kind": "goal",
+   "title": "flat roof over the house",
+   "why": "a house without a roof is a pen",
+   "parent": "homestead",
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205471+00:00",
+   "weights": {},
+   "serves_values": {
+    "safety": 0.7,
+    "craftsmanship": 0.7
+   },
+   "status_reason": ""
+  },
+  "door": {
+   "id": "door",
+   "kind": "goal",
+   "title": "hang the front door",
+   "why": "keep the night outside",
+   "parent": "homestead",
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205474+00:00",
+   "weights": {},
+   "serves_values": {
+    "safety": 0.8,
+    "craftsmanship": 0.3
+   },
+   "status_reason": ""
+  },
+  "farm": {
+   "id": "farm",
+   "kind": "goal",
+   "title": "wheat farm within 10 blocks",
+   "why": "food security ends the scavenging",
+   "parent": "homestead",
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205479+00:00",
+   "weights": {},
+   "serves_values": {
+    "teamwork": 0.6,
+    "craftsmanship": 0.4
+   },
+   "status_reason": ""
+  },
+  "improve": {
+   "id": "improve",
+   "kind": "goal",
+   "title": "torches, fences, decorations",
+   "why": "make it a home, not a box",
+   "parent": "homestead",
+   "status": "active",
+   "owner": "shared",
+   "anchor": null,
+   "created_by": "system",
+   "created_at": "2026-07-20T21:16:58.205481+00:00",
+   "weights": {},
+   "serves_values": {
+    "spectacle": 0.8,
+    "craftsmanship": 0.8
+   },
+   "status_reason": ""
+  }
+ },
+ "active": {
+  "sable": "walls",
+  "jolt": "walls"
+ }
+}

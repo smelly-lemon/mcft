@@ -106,3 +106,31 @@ def test_round_trip(tmp_path, graph: IntentGraph) -> None:
     loaded = IntentGraph.load(p)
     assert loaded.active == graph.active
     assert loaded.nodes.keys() == graph.nodes.keys()
+
+
+def test_alignment_is_the_steering_signal() -> None:
+    personas = {
+        "sable": {"craftsmanship": 0.9, "spectacle": 0.1},
+        "jolt": {"craftsmanship": 0.2, "spectacle": 0.9},
+    }
+    g = seed_homestead((0, 86, 64), personas)
+    # 'improve' serves spectacle+craftsmanship; 'door' serves safety (unweighted here).
+    assert g.alignment("jolt", "improve") > g.alignment("jolt", "door")
+    # Sable's craftsmanship makes 'improve' strong for her too, but ranking
+    # between personas differs on the spectacle-heavy node.
+    assert g.alignment("jolt", "improve") > g.alignment("sable", "improve") - 0.9 * 0.8
+    # Tasks inherit half their parent's serves_values.
+    g.apply_op("jolt", "goalSwitch", node_id="improve")
+    res = g.apply_op("jolt", "goalAdd", title="torch spiral", why="make it shine")
+    parent_only = g.alignment("jolt", "improve")
+    assert g.alignment("jolt", res.node_id) == pytest.approx(parent_only * 0.5)
+
+
+def test_render_sorts_siblings_by_alignment() -> None:
+    personas = {"jolt": {"spectacle": 1.0}}
+    g = seed_homestead((0, 86, 64), personas)
+    g.apply_op("jolt", "goalSwitch", node_id="walls")
+    view = g.render_path_view("jolt")
+    alts = next(line for line in view.splitlines() if line.startswith("Alternatives"))
+    # 'improve' (spectacle 0.8) must outrank 'door' (no spectacle) for Jolt.
+    assert alts.index("improve") < alts.index("door")
