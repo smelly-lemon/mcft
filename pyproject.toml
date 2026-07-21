@@ -32,6 +32,13 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# ops patch scripts embed verbatim JS payloads; schemas carry verbatim
+# kickoff-prompt comments. Neither can honor the line limit by design.
+"integrations/mindcraft/ops/patch_*.py" = ["E501"]
+"integrations/mindcraft/ops/soft_reset.py" = ["E501"]
+"src/mcft/schemas/__init__.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

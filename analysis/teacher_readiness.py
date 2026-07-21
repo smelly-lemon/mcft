@@ -246,7 +246,8 @@ def main() -> None:
         far = sum(1 for d in dists if d > 30)
         print(
             f"{era:<10} dist p50 {pctl(dists,0.5):>6.0f}  p95 {pctl(dists,0.95):>6.0f}  "
-            f">30 blocks: {100*far/len(dists):>4.1f}%   underground(y<75): {100*under/len(dists):>4.1f}%"
+            f">30 blocks: {100*far/len(dists):>4.1f}%   "
+            f"underground(y<75): {100*under/len(dists):>4.1f}%"
         )
 
     print()
@@ -306,7 +307,8 @@ def main() -> None:
     print("10. CHAT CONTENT (step_type == chat)")
     chats = [s for ss in steps_by_era.values() for s in ss if s.get("step_type") == "chat"]
     lens = [len(s.get("model_output") or "") for s in chats]
-    print(f"chat steps: {len(chats)}  ({100*len(chats)/sum(len(v) for v in steps_by_era.values()):.1f}% of all)")
+    total = sum(len(v) for v in steps_by_era.values())
+    print(f"chat steps: {len(chats)}  ({100*len(chats)/total:.1f}% of all)")
     if chats:
         print(f"length p50: {pctl(lens,0.5)} chars")
         for s in chats[-5:]:
