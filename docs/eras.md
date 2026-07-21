@@ -12,7 +12,24 @@ off these boundaries.
 | C_churn | 2026-07-19 15:15 | 2026-07-19 21:55 | loop-breaker v2, collect guard, memguard, goto near-arrival, keep_alive -1 | world | watchdog v3/v4 churn window |
 | D_clean | 2026-07-19 21:55 | 2026-07-20 20:52 | + taskguard, watchdog v4, 2-agent check | world | best pre-reset era; E1-E6 deployed 18:03 UTC 07-20 for the 2.5h smoke soak |
 | E_baseline | 2026-07-20 20:53 | 2026-07-21 17:20 | D scaffold + E1-E6 + siteguard v2 | worldE, seed 4770568866102418726, site (0, 86, 64) | clean baseline; called at T+20.4h (rates flat, marginal hours redundant) |
-| **F_intent** | **2026-07-21 17:27** | (open) | E scaffold + intent graph ON + chestguard | worldE (continuous) | era-F candidate: INTENT prompts, !goal ops, graph journals, loop-breaker v3 |
+| F_intent | 2026-07-21 17:27 | 2026-07-21 20:37 | E scaffold + intent graph v1 ON + chestguard | worldE (continuous) | DEADLOCKED - see below; data unusable for the ablation |
+| **F2_intent** | **2026-07-21 20:42** | (open) | F scaffold + intent graph v1.1 (self-healing) | worldE (continuous) | blocks decay 20min, system goals unkillable, switch revives, auto-heal |
+
+Era-F post-mortem (the soak did its job): loop-breaker `block` ops from two
+bots sharing one graph permanently blocked every node inside ~2h, including
+the mission root. With everything blocked, `goalSwitch` refused all targets
+and `goalAdd` defaulted its parent to the (empty) active pointer ("parent
+'undefined' not found") - a deadlock with no model-reachable exit. Bots ran
+headless (empty INTENT) for the remainder. Infra itself was clean: zero JS
+errors, chestguard verified live. Positive signal: models used the op
+surface correctly (clean goalAdd with a real why, goalSwitch after walls).
+
+Era-F2 fix (v1.1, both runtimes + 21-check smoke + 19 pytest): blocks carry
+a 20-minute decay timer; system mission goals never change status on block
+(pointer steers away instead); goalSwitch accepts exact titles and revives
+blocked goals; goalAdd falls back to the mission root; an all-blocked tree
+auto-heals; pointerless bots are auto-pointed at the next open leaf on view
+render. Live graph reseeded pristine at F2 start.
 
 Era-E note: at 21:19 UTC the stack restarted onto code that includes the
 DORMANT intent-graph integration (settings.mcft_intent=false). Verified

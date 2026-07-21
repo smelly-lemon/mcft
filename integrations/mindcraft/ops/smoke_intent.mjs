@@ -33,7 +33,32 @@ check('goalDone walks back to walls', r.ok && g.active['sable'] === 'walls');
 r = g.applyOp('jolt', 'block', { reason: 'repeating the same action' });
 check('block reroutes jolt', r.ok && g.active['jolt'] !== 'walls');
 check('block message has alternatives', r.message.includes('Alternatives:'));
-check('walls now blocked', g.nodes['walls'].status === 'blocked');
+// era-F fix: system mission goals never lose their status to a block
+check('walls survives block (system node)', g.nodes['walls'].status === 'active');
+
+// era-F fix: persona tasks block WITH a decay timer, and expire
+r = g.applyOp('jolt', 'goalAdd', { title: 'dig clay pit', why: 'bricks for the roof' });
+const taskId = r.node_id;
+g.applyOp('jolt', 'block', { reason: 'flooded' });
+check('persona task blocked with timer',
+    g.nodes[taskId].status === 'blocked' && g.nodes[taskId].blocked_until);
+g.nodes[taskId].blocked_until = '2020-01-01T00:00:00Z';
+g.applyOp('jolt', 'goalSwitch', { node_id: 'walls' });
+check('expired block reopens', g.nodes[taskId].status === 'active');
+
+// era-F fix: switch revives a blocked goal and accepts exact titles
+g.applyOp('jolt', 'goalSwitch', { node_id: taskId });
+g.applyOp('jolt', 'block', { reason: 'still flooded' });
+r = g.applyOp('jolt', 'goalSwitch', { node_id: 'dig clay pit', why: 'water drained' });
+check('switch by title revives blocked', r.ok && g.nodes[taskId].status === 'active');
+
+// era-F fix: all-blocked tree heals instead of deadlocking
+for (const n of Object.values(g.nodes)) if (n.kind !== 'value') n.status = 'blocked';
+for (const k of Object.keys(g.active)) delete g.active[k];
+info = g.info('sable', 'jolt');
+check('all-blocked tree auto-heals', info.view.includes('NOW:'));
+r = g.applyOp('sable', 'goalAdd', { title: 'restart effort', why: 'mission stalled' });
+check('goalAdd works after heal (root fallback)', r.ok);
 
 // alignment steering: jolt is spectacle-heavy, improve should rank over door
 check('alignment steers jolt to improve', g.alignment('jolt', 'improve') > g.alignment('jolt', 'door'));

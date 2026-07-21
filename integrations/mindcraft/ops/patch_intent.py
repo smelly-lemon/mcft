@@ -178,21 +178,20 @@ if "!goalDone" not in text:
     },
     {
         name: '!goalAdd',
-        description: 'Add a subgoal under your current goal (or a given parent) and switch to it.',
+        description: 'Add a subgoal under your current goal and switch to it.',
         params: {
             'title': { type: 'string', description: 'Short goal title.' },
-            'why': { type: 'string', description: 'Why this serves the parent goal.' },
-            'parent_id': { type: 'string', description: 'Parent goal id, or empty for current.' }
+            'why': { type: 'string', description: 'Why this serves the parent goal.' }
         },
-        perform: async function (agent, title, why, parent_id) {
+        perform: async function (agent, title, why) {
             if (!settings.mcft_intent) return 'Intent graph is disabled.';
-            const res = await serverProxy.intentOp('goalAdd', { title, why, parent_id });
+            const res = await serverProxy.intentOp('goalAdd', { title, why });
             return res ? res.message : 'Intent graph unavailable.';
         }
     },
     {
         name: '!goalSwitch',
-        description: 'Switch your active goal to another open goal by id.',
+        description: 'Switch your active goal to another goal by id (or exact title). Reopens a blocked goal.',
         params: {
             'node_id': { type: 'string', description: 'Goal id from the INTENT section.' },
             'why': { type: 'string', description: 'Why switch now.' }

@@ -88,10 +88,63 @@ export class IntentGraph {
         return score;
     }
 
+    // -- self-healing (mirrors Python _expire_blocks) -------------------------
+
+    _expireBlocks() {
+        // Reactivate expired blocks; heal an all-blocked tree; repoint bots
+        // standing on dead nodes. The era-F soak deadlocked without this.
+        // Returns true if anything changed (callers persist).
+        let changed = false;
+        const now = new Date().toISOString();
+        const goals = Object.values(this.nodes).filter(n => n.kind !== 'value');
+        for (const n of goals) {
+            if (n.status === 'blocked' && n.blocked_until && n.blocked_until <= now) {
+                n.status = 'active';
+                n.status_reason = 'block expired';
+                n.blocked_until = null;
+                changed = true;
+            }
+        }
+        if (goals.length && !goals.some(n => n.status === 'active')) {
+            for (const n of goals) {
+                if (n.status === 'blocked') {
+                    n.status = 'active';
+                    n.status_reason = 'auto-heal: tree had no open goals';
+                    n.blocked_until = null;
+                    changed = true;
+                }
+            }
+        }
+        for (const [bot, nodeId] of Object.entries(this.active)) {
+            const node = this.nodes[nodeId];
+            if (!node || node.status !== 'active') {
+                const start = node ? node.parent : this._missionRoot();
+                const leaf = this._nextLeaf(start);
+                if (leaf) this.active[bot] = leaf.id;
+                else delete this.active[bot];
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    _missionRoot() {
+        const root = Object.values(this.nodes).find(n => n.kind !== 'value' && !n.parent);
+        return root ? root.id : null;
+    }
+
+    _byTitle(text) {
+        const want = String(text).trim().toLowerCase();
+        const matches = Object.values(this.nodes)
+            .filter(n => n.kind !== 'value' && n.title.trim().toLowerCase() === want);
+        return matches.length === 1 ? matches[0] : null;
+    }
+
     // -- ops (single entry point, mirrors Python apply_op) -------------------
 
     applyOp(bot, op, args) {
         try {
+            this._expireBlocks();
             const handlers = {
                 goalDone: () => this._opDone(bot, args.reason || ''),
                 goalAdd: () => this._opAdd(bot, args.title || '', args.why || '', args.parent_id || ''),
@@ -101,7 +154,7 @@ export class IntentGraph {
             const handler = handlers[op];
             if (!handler) return { ok: false, message: `unknown intent op '${op}'` };
             const res = handler();
-            if (res.ok) this.save();
+            this.save(); // healing above may have mutated even on a rejected op
             return res;
         } catch (e) {
             return { ok: false, message: `intent op rejected: ${e.message}` };
@@ -130,7 +183,7 @@ export class IntentGraph {
     _opAdd(bot, title, why, parentId) {
         if (!title.trim()) return { ok: false, message: 'goalAdd needs a title' };
         if (!why.trim()) return { ok: false, message: 'goalAdd needs a why - every goal must serve its parent' };
-        const parent = parentId || this.active[bot];
+        const parent = parentId || this.active[bot] || this._missionRoot();
         const parentNode = this.nodes[parent];
         if (!parentNode) return { ok: false, message: `parent '${parent}' not found` };
         if (parentNode.kind === 'value') return { ok: false, message: 'value nodes cannot have children' };
@@ -143,37 +196,52 @@ export class IntentGraph {
             id, kind: 'task', title: title.trim().slice(0, 80), why: why.trim().slice(0, 120),
             parent, status: 'active', owner: bot, anchor: null,
             created_by: 'persona', created_at: new Date().toISOString(),
-            weights: {}, serves_values: {}, status_reason: '',
+            weights: {}, serves_values: {}, status_reason: '', blocked_until: null,
         };
         this.active[bot] = id;
         return { ok: true, message: `added and switched to: ${title.trim()}`, node_id: id };
     }
 
     _opSwitch(bot, nodeId, why) {
-        const node = this.nodes[nodeId];
+        const node = this.nodes[nodeId] || this._byTitle(nodeId);
         if (!node) return { ok: false, message: `no such goal '${nodeId}'` };
         if (node.kind === 'value') return { ok: false, message: 'cannot work a value directly - pick a goal that serves it' };
-        if (node.status !== 'active') return { ok: false, message: `'${node.title}' is ${node.status}` };
-        this.active[bot] = nodeId;
-        return { ok: true, message: `switched to: ${node.title}`, node_id: nodeId };
+        if (node.status === 'blocked') {
+            // deliberate revive: switching back to a blocked goal unblocks it
+            node.status = 'active';
+            node.status_reason = why ? `revived by ${bot}: ${why}` : `revived by ${bot}`;
+            node.blocked_until = null;
+        } else if (node.status !== 'active') {
+            return { ok: false, message: `'${node.title}' is ${node.status}` };
+        }
+        this.active[bot] = node.id;
+        return { ok: true, message: `switched to: ${node.title}`, node_id: node.id };
     }
 
     _opBlock(bot, reason) {
-        // Code-driven (loop-breaker v3): block the active node, present siblings.
+        // Code-driven (loop-breaker v3): step away from the stuck goal.
+        // Only persona tasks change status (with a decay timer); system
+        // mission goals are structure and merely lose this bot's pointer.
         const nodeId = this.active[bot];
         if (!nodeId) return { ok: false, message: 'no active goal to block' };
         const node = this.nodes[nodeId];
-        node.status = 'blocked';
-        node.status_reason = reason;
+        if (node.created_by !== 'system') {
+            node.status = 'blocked';
+            node.status_reason = reason;
+            node.blocked_until = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+        }
         const sibs = node.parent
-            ? this.children(node.parent).filter(c => c.status === 'active')
+            ? this.children(node.parent).filter(c => c.status === 'active' && c.id !== nodeId)
                   .sort((a, b) => this.alignment(bot, b.id) - this.alignment(bot, a.id)).slice(0, 3)
             : [];
         const nxt = sibs[0] || this._nextLeaf(node.parent);
         if (nxt) this.active[bot] = nxt.id;
         else delete this.active[bot];
         const alts = sibs.map(s => `[${s.id}] ${s.title}`).join('; ');
-        const msg = `Your goal '${node.title}' is blocked (${reason}). ` +
+        const stuckNote = node.created_by === 'system'
+            ? `You are stuck on '${node.title}' (${reason}) - stepping away for now; come back with a different approach.`
+            : `Your goal '${node.title}' is blocked (${reason}) and will reopen in 20 minutes.`;
+        const msg = stuckNote + ' ' +
             (nxt ? `Now on: ${nxt.title}.` : 'No open goals - add one with !goalAdd.') +
             (alts ? ` Alternatives: ${alts}. Use !goalSwitch to change.` : '');
         return { ok: true, message: msg, node_id: nxt ? nxt.id : null };
@@ -204,15 +272,26 @@ export class IntentGraph {
     // -- prompt view (INTENT section, ~200 token budget) ---------------------
 
     info(bot, partner) {
+        if (this._expireBlocks()) this.save();
         const lines = ['INTENT (why you are doing what you are doing):'];
         const vals = this.valuesFor(bot);
         if (vals.length) {
             lines.push('You value: ' + vals.map(([t, w]) => `${t} (${w.toFixed(1)})`).join(', '));
         }
-        const nodeId = this.active[bot];
+        let nodeId = this.active[bot];
+        if (!nodeId) {
+            // pointerless bot: auto-point at the best open leaf rather than
+            // asking the model to recover (era-F showed it fumbles that)
+            const leaf = this._nextLeaf(this._missionRoot());
+            if (leaf) {
+                this.active[bot] = leaf.id;
+                nodeId = leaf.id;
+                this.save();
+            }
+        }
         const pathIds = [];
         if (!nodeId) {
-            lines.push('No active goal. Pick one with !goalSwitch or add one with !goalAdd.');
+            lines.push('No active goal. Add one with !goalAdd.');
         } else {
             const chain = this.path(nodeId).filter(n => n.kind !== 'value');
             chain.forEach((node, depth) => {
