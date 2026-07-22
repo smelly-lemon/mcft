@@ -9,3 +9,4 @@ runs/
 .env
 node_modules/
 .DS_Store
+analysis/runs/

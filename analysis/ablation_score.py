@@ -98,8 +98,9 @@ def main() -> None:
             f"goal ops {stats['goal_ops'] or 'none'}"
         )
 
-    # journal drift check: GOAL line should be a mission phase
-    phase = re.compile(r"GOAL:\s*(house walls|roof|door|wheat farm|improvements)", re.I)
+    # journal drift check: GOAL line should be a mission phase. Arm F writes
+    # graph node titles ("finish the house walls"), arm E the bare phase name.
+    phase = re.compile(r"GOAL:.*\b(walls|roof|door|farm|improvements?)\b", re.I)
     for jf in sorted(run_dir.glob("*/journal_*.json")):
         mem = json.loads(jf.read_text()).get("memory", "")
         goal = re.search(r"GOAL:.*", mem)

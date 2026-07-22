@@ -31,6 +31,26 @@ blocked goals; goalAdd falls back to the mission root; an all-blocked tree
 auto-heals; pointerless bots are auto-pointed at the next open leaf on view
 render. Live graph reseeded pristine at F2 start.
 
+## Ablation run-20260721-1614 (E vs F2, paired)
+
+3 pairs x 35 min, alternating E,F from identical era-E-end snapshots
+(world + journals), qwen3.6:35b both arms, eval server, live show paused
+23:14-02:47 UTC. Data: `analysis/runs/run-20260721-1614/` (laptop) +
+`tim4:~/Desktop/mindcraft/ablation/`. Orchestrator: 6/6 clean handoffs.
+
+Results (arm E / arm F2): steps 254/277, fail rate 9.8%/7.2%, exact
+repeats 75/65 per 1k, alternations 75/130 per 1k, chest share 1.0/1.0,
+journal GOAL drift 0/0, lat p50 13.6s/14.7s p95 41.6s/33.7s. Intent: path
+on 100% of F steps, 2 deliberate goalSwitch ops, no deadlock.
+
+Read: F2 wins on failures and exact repeats, loses on alternations - the
+block op ping-pongs pointers between two sibling goals (walls<->roof) and
+the model alternates outputs with it. Neither arm drifted journals (E's
+E1-E6 prompt discipline already handles it; F makes it structural). Net:
+graph is mechanically sound and pays its way on teacher-data annotation
+(intent_path per step); needs v1.2 anti-ping-pong (don't steer back to
+the goal just left within the cooldown) before it clearly wins on meters.
+
 Era-E note: at 21:19 UTC the stack restarted onto code that includes the
 DORMANT intent-graph integration (settings.mcft_intent=false). Verified
 byte-identical prompts (docs gate check) and identical behavior; the only
