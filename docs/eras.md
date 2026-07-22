@@ -13,7 +13,8 @@ off these boundaries.
 | D_clean | 2026-07-19 21:55 | 2026-07-20 20:52 | + taskguard, watchdog v4, 2-agent check | world | best pre-reset era; E1-E6 deployed 18:03 UTC 07-20 for the 2.5h smoke soak |
 | E_baseline | 2026-07-20 20:53 | 2026-07-21 17:20 | D scaffold + E1-E6 + siteguard v2 | worldE, seed 4770568866102418726, site (0, 86, 64) | clean baseline; called at T+20.4h (rates flat, marginal hours redundant) |
 | F_intent | 2026-07-21 17:27 | 2026-07-21 20:37 | E scaffold + intent graph v1 ON + chestguard | worldE (continuous) | DEADLOCKED - see below; data unusable for the ablation |
-| **F2_intent** | **2026-07-21 20:42** | (open) | F scaffold + intent graph v1.1 (self-healing) | worldE (continuous) | blocks decay 20min, system goals unkillable, switch revives, auto-heal |
+| F2_intent | 2026-07-21 20:42 | 2026-07-22 03:24 | F scaffold + intent graph v1.1 (self-healing) | worldE (continuous) | blocks decay 20min, system goals unkillable, switch revives, auto-heal; ablation-validated |
+| **F3_intent** | **2026-07-22 03:24** | (open) | F2 + intent v1.2 anti-ping-pong + chestguard v2 (auto-clear) | worldE (continuous) | overnight run; block steering excludes goals left <20min ago; chest covers cleared automatically |
 
 Era-F post-mortem (the soak did its job): loop-breaker `block` ops from two
 bots sharing one graph permanently blocked every node inside ~2h, including
@@ -71,6 +72,18 @@ corpus-eraE-final-2026-07-21.tgz (9.5M).
 
 Era-F activation verified: intent_path populated per step, INTENT section
 in deployed profiles, mindserver serving views (single writer).
+
+Era-F3 (v1.2, overnight 07-22): two ablation-driven fixes. (1) Anti-ping-
+pong: the graph remembers per-bot "recently stepped away" goals (20-min
+TTL, persisted in `recent_steps_away`); block steering excludes them from
+sibling choice and leaf search, falling back to any open leaf only when
+everything is avoided. A deliberate goalSwitch clears the guard for that
+goal. (2) Chestguard v2: both ablation arms kept failing on the dirt-
+covered chest baked into the era-E snapshot - the guard now auto-clears
+soft covers (dirt/sand/planks/...) via breakBlockAt before reporting.
+Validated: 24-check JS smoke on Studio, 22 pytest, JS-mutated graph
+round-trips through the Python schema. Fork commit a77c555; F2 pointer
+state (sable:roof, jolt:farm) carried across the restart.
 
 Archives: era-D world in `tim4:~/Backups/mcft/world-eraD-2026-07-20.tgz` (54M,
 includes nether/end); corpus snapshots nightly in `tim4:~/Backups/mcft/` and

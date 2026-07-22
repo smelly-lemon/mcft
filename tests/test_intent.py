@@ -77,21 +77,52 @@ def test_anchor_conflict_catches_y_blend(graph: IntentGraph) -> None:
 def test_block_never_kills_system_goals(graph: IntentGraph) -> None:
     # Era-F soak lesson: mission phases are structure; the loop-breaker
     # steers away from them but must not change their status.
-    siblings = graph.block("walls", "repetition loop on placeHere")
-    titles = {s.id for s in siblings}
-    assert "roof" in titles and "walls" not in titles
+    res = graph.apply_op("sable", "block", reason="repetition loop on placeHere")
+    assert res.ok
     assert graph.nodes["walls"].status == "active"
+    assert graph.active["sable"] != "walls"  # but the pointer moved off it
 
 
 def test_block_on_persona_task_expires(graph: IntentGraph) -> None:
     res = graph.apply_op("sable", "goalAdd", title="cobble run", why="walls need stone")
-    graph.block(res.node_id, "stuck")
+    graph.apply_op("sable", "block", reason="stuck")
     node = graph.nodes[res.node_id]
     assert node.status == "blocked" and node.blocked_until is not None
     # decay: force the timer into the past; any op sweeps it back to active
     node.blocked_until = "2020-01-01T00:00:00+00:00"
     graph.apply_op("sable", "goalSwitch", node_id="walls")
     assert graph.nodes[res.node_id].status == "active"
+
+
+def test_block_steering_does_not_ping_pong(graph: IntentGraph) -> None:
+    # Ablation 2026-07-21: F2 doubled alternations because a bot blocked on
+    # walls got steered to roof, blocked on roof, and got steered straight
+    # back to walls. Fresh step-aways must be excluded from steering.
+    visited = ["walls"]
+    for _ in range(3):
+        res = graph.apply_op("sable", "block", reason="stuck")
+        assert res.ok
+        assert res.node_id not in visited, f"ping-pong back to {res.node_id}"
+        visited.append(res.node_id)
+
+
+def test_block_falls_back_when_everything_avoided() -> None:
+    # two-goal graph: once both are freshly avoided, revisiting beats idling
+    g = IntentGraph()
+    g.add(IntentNode(id="root", kind="goal", title="tiny base", anchor=(0, 64, 0)))
+    g.add(IntentNode(id="a", kind="task", title="dig", parent="root"))
+    g.add(IntentNode(id="b", kind="task", title="chop", parent="root"))
+    g.active["sable"] = "a"
+    assert g.apply_op("sable", "block", reason="x").node_id == "b"
+    res = g.apply_op("sable", "block", reason="y")
+    assert res.ok and res.node_id is not None  # never left pointerless
+
+
+def test_switch_clears_step_away_guard(graph: IntentGraph) -> None:
+    graph.apply_op("sable", "block", reason="stuck")
+    assert "walls" in graph.recent_steps_away["sable"]
+    graph.apply_op("sable", "goalSwitch", node_id="walls")  # deliberate return
+    assert "walls" not in graph.recent_steps_away.get("sable", {})
 
 
 def test_all_blocked_tree_heals(graph: IntentGraph) -> None:
@@ -109,7 +140,7 @@ def test_all_blocked_tree_heals(graph: IntentGraph) -> None:
 
 def test_switch_revives_blocked_goal(graph: IntentGraph) -> None:
     res = graph.apply_op("sable", "goalAdd", title="dig clay", why="bricks later")
-    graph.block(res.node_id, "flooded")
+    graph.apply_op("sable", "block", reason="flooded")
     revived = graph.apply_op("sable", "goalSwitch", node_id=res.node_id, why="water drained")
     assert revived.ok
     assert graph.nodes[res.node_id].status == "active"
@@ -121,10 +152,10 @@ def test_switch_accepts_exact_title(graph: IntentGraph) -> None:
 
 
 def test_partner_block_repoints_stranded_bot(graph: IntentGraph) -> None:
-    # both bots on walls; a persona subgoal gets blocked while sable points at it
+    # both bots on the same persona subgoal; sable blocks it, stranding jolt
     res = graph.apply_op("sable", "goalAdd", title="plank haul", why="walls need planks")
     graph.apply_op("jolt", "goalSwitch", node_id=res.node_id)
-    graph.block(res.node_id, "stuck")
+    graph.apply_op("sable", "block", reason="stuck")
     view = graph.render_path_view("jolt")
     assert graph.nodes[graph.active["jolt"]].status == "active"
     assert "NOW:" in view

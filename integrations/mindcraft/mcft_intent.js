@@ -16,6 +16,9 @@ export class IntentGraph {
     constructor(data) {
         this.nodes = data.nodes || {};
         this.active = data.active || {};
+        // v1.2 ping-pong guard: bot -> node_id -> avoid-until ISO (the 07-21
+        // ablation showed block-steering bouncing between two siblings)
+        this.recent = data.recent_steps_away || {};
     }
 
     static loadIfPresent() {
@@ -30,7 +33,8 @@ export class IntentGraph {
 
     save() {
         const tmp = FILE + '.tmp';
-        writeFileSync(tmp, JSON.stringify({ nodes: this.nodes, active: this.active }, null, 1) + '\n');
+        const data = { nodes: this.nodes, active: this.active, recent_steps_away: this.recent };
+        writeFileSync(tmp, JSON.stringify(data, null, 1) + '\n');
         renameSync(tmp, FILE); // atomic on POSIX
     }
 
@@ -215,13 +219,30 @@ export class IntentGraph {
             return { ok: false, message: `'${node.title}' is ${node.status}` };
         }
         this.active[bot] = node.id;
+        // a deliberate switch overrides the ping-pong guard for this goal
+        if (this.recent[bot]) delete this.recent[bot][node.id];
         return { ok: true, message: `switched to: ${node.title}`, node_id: node.id };
+    }
+
+    _freshAvoids(bot) {
+        // Prune expired step-away entries; return node ids still to avoid.
+        const now = new Date().toISOString();
+        const entries = this.recent[bot] || {};
+        const fresh = {};
+        for (const [nid, until] of Object.entries(entries)) {
+            if (until > now) fresh[nid] = until;
+        }
+        if (Object.keys(fresh).length) this.recent[bot] = fresh;
+        else delete this.recent[bot];
+        return new Set(Object.keys(fresh));
     }
 
     _opBlock(bot, reason) {
         // Code-driven (loop-breaker v3): step away from the stuck goal.
         // Only persona tasks change status (with a decay timer); system
         // mission goals are structure and merely lose this bot's pointer.
+        // v1.2: remember what we stepped away from and do not steer straight
+        // back to it - that is how the ablation arm doubled its alternations.
         const nodeId = this.active[bot];
         if (!nodeId) return { ok: false, message: 'no active goal to block' };
         const node = this.nodes[nodeId];
@@ -230,11 +251,17 @@ export class IntentGraph {
             node.status_reason = reason;
             node.blocked_until = new Date(Date.now() + 20 * 60 * 1000).toISOString();
         }
+        if (!this.recent[bot]) this.recent[bot] = {};
+        this.recent[bot][nodeId] = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+        const avoid = this._freshAvoids(bot);
         const sibs = node.parent
-            ? this.children(node.parent).filter(c => c.status === 'active' && c.id !== nodeId)
+            ? this.children(node.parent)
+                  .filter(c => c.status === 'active' && c.id !== nodeId && !avoid.has(c.id))
                   .sort((a, b) => this.alignment(bot, b.id) - this.alignment(bot, a.id)).slice(0, 3)
             : [];
-        const nxt = sibs[0] || this._nextLeaf(node.parent);
+        const nxt = sibs[0]
+            || this._nextLeaf(node.parent, avoid)
+            || this._nextLeaf(node.parent); // everything avoided: any leaf beats none
         if (nxt) this.active[bot] = nxt.id;
         else delete this.active[bot];
         const alts = sibs.map(s => `[${s.id}] ${s.title}`).join('; ');
@@ -247,10 +274,12 @@ export class IntentGraph {
         return { ok: true, message: msg, node_id: nxt ? nxt.id : null };
     }
 
-    _nextLeaf(start) {
+    _nextLeaf(start, avoid = null) {
+        const skip = avoid || new Set();
         const firstActiveLeaf = (nodeId) => {
             const kids = this.children(nodeId).filter(c => c.status === 'active');
             if (!kids.length) {
+                if (skip.has(nodeId)) return null;
                 const node = this.nodes[nodeId];
                 return node && node.status === 'active' && node.kind !== 'value' ? node : null;
             }

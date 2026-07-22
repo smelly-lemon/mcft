@@ -36,6 +36,15 @@ check('block message has alternatives', r.message.includes('Alternatives:'));
 // era-F fix: system mission goals never lose their status to a block
 check('walls survives block (system node)', g.nodes['walls'].status === 'active');
 
+// v1.2 fix: steering must not bounce straight back (07-21 ablation doubled
+// alternations exactly this way: walls -> roof -> walls -> roof ...)
+const s1 = g.active['jolt'];
+r = g.applyOp('jolt', 'block', { reason: 'stuck again' });
+check('block does not ping-pong', r.ok && g.active['jolt'] !== 'walls' && g.active['jolt'] !== s1);
+r = g.applyOp('jolt', 'goalSwitch', { node_id: 'walls' });
+check('deliberate switch back is allowed', r.ok && g.active['jolt'] === 'walls');
+check('switch clears step-away guard', !(g.recent['jolt'] || {})['walls']);
+
 // era-F fix: persona tasks block WITH a decay timer, and expire
 r = g.applyOp('jolt', 'goalAdd', { title: 'dig clay pit', why: 'bricks for the roof' });
 const taskId = r.node_id;

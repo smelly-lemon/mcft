@@ -66,6 +66,10 @@ class IntentGraph(BaseModel):
     nodes: dict[str, IntentNode] = Field(default_factory=dict)
     # each bot's current working leaf
     active: dict[str, str] = Field(default_factory=dict)
+    # v1.2 ping-pong guard: goals each bot recently stepped away from
+    # (bot -> node_id -> avoid-until ISO). The ablation showed block-steering
+    # bouncing pointers between two siblings (alternations 130 vs 75 per 1k).
+    recent_steps_away: dict[str, dict[str, str]] = Field(default_factory=dict)
 
     # -- construction ------------------------------------------------------
 
@@ -212,6 +216,7 @@ class IntentGraph(BaseModel):
                 "goalDone": self._op_done,
                 "goalAdd": self._op_add,
                 "goalSwitch": self._op_switch,
+                "block": self._op_block,  # code-driven (loop-breaker), not in docs
             }.get(op)
             if handler is None:
                 return OpResult(ok=False, message=f"unknown intent op {op!r}")
@@ -297,6 +302,8 @@ class IntentGraph(BaseModel):
         elif node.status != "active":
             return OpResult(ok=False, message=f"{node.title!r} is {node.status}")
         self.active[bot] = node.id
+        # a deliberate switch overrides the ping-pong guard for this goal
+        self.recent_steps_away.get(bot, {}).pop(node.id, None)
         return OpResult(ok=True, message=f"switched to: {node.title}", node_id=node.id)
 
     def _by_title(self, text: str) -> IntentNode | None:
@@ -317,34 +324,84 @@ class IntentGraph(BaseModel):
 
     # -- code-driven ops (loop-breaker / siteguard integration) --------------
 
-    def block(self, node_id: str, reason: str) -> list[IntentNode]:
-        """Step away from a stuck goal; return sibling alternatives.
+    def _fresh_avoids(self, bot: str) -> set[str]:
+        """Prune expired step-away entries; return node ids still to avoid."""
+        now = utc_now().isoformat()
+        entries = self.recent_steps_away.get(bot, {})
+        fresh = {nid: until for nid, until in entries.items() if until > now}
+        if fresh:
+            self.recent_steps_away[bot] = fresh
+        else:
+            self.recent_steps_away.pop(bot, None)
+        return set(fresh)
 
-        Era-F soak lesson: only persona-created tasks actually change status
-        (with a decay timer). System mission goals are structure - the
-        loop-breaker steers the bot's pointer away but must never kill them.
+    def _op_block(self, bot: str, reason: str = "") -> OpResult:
+        """Loop-breaker path: step away from the stuck goal.
+
+        Era-F soak lessons: only persona-created tasks change status (with a
+        decay timer) - system mission goals are structure. Ablation lesson
+        (v1.2): remember what we stepped away from and do not steer straight
+        back to it, or the pointer ping-pongs between two siblings.
         """
-        self._expire_blocks()
+        node_id = self.active.get(bot)
+        if node_id is None:
+            return OpResult(ok=False, message="no active goal to block")
         node = self.nodes[node_id]
         if node.created_by != "system":
             node.status = "blocked"
             node.status_reason = reason
             until = utc_now() + timedelta(minutes=BLOCK_COOLDOWN_MINUTES)
             node.blocked_until = until.isoformat()
-        if node.parent is None:
-            return []
-        return [
-            c
-            for c in self.children(node.parent)
-            if c.status == "active" and c.id != node_id
-        ]
+        avoid_until = utc_now() + timedelta(minutes=BLOCK_COOLDOWN_MINUTES)
+        self.recent_steps_away.setdefault(bot, {})[node_id] = avoid_until.isoformat()
+        avoid = self._fresh_avoids(bot)
 
-    def _next_leaf(self, bot: str, start: str | None) -> IntentNode | None:
+        sibs = []
+        if node.parent is not None:
+            sibs = [
+                c
+                for c in self.children(node.parent)
+                if c.status == "active" and c.id != node_id and c.id not in avoid
+            ]
+            sibs.sort(key=lambda s: -self.alignment(bot, s.id))
+            sibs = sibs[:3]
+        nxt = (
+            (sibs[0] if sibs else None)
+            or self._next_leaf(bot, node.parent, avoid=avoid)
+            or self._next_leaf(bot, node.parent)  # all avoided: any leaf beats none
+        )
+        if nxt is not None:
+            self.active[bot] = nxt.id
+        else:
+            self.active.pop(bot, None)
+        alts = "; ".join(f"[{s.id}] {s.title}" for s in sibs)
+        stuck = (
+            f"You are stuck on {node.title!r} ({reason}) - stepping away for now; "
+            "come back with a different approach."
+            if node.created_by == "system"
+            else f"Your goal {node.title!r} is blocked ({reason}) "
+            f"and will reopen in {BLOCK_COOLDOWN_MINUTES} minutes."
+        )
+        follow = f"Now on: {nxt.title}." if nxt else "No open goals - add one with !goalAdd."
+        tail = f" Alternatives: {alts}. Use !goalSwitch to change." if alts else ""
+        return OpResult(
+            ok=True,
+            message=f"{stuck} {follow}{tail}",
+            node_id=nxt.id if nxt else None,
+        )
+
+    def _next_leaf(
+        self, bot: str, start: str | None, avoid: set[str] | None = None
+    ) -> IntentNode | None:
         """Nearest active descendant leaf under `start` (or any open node)."""
+        skip = avoid or set()
+
         def first_active_leaf(node_id: str) -> IntentNode | None:
             kids = [c for c in self.children(node_id) if c.status == "active"]
             if not kids:
                 node = self.nodes[node_id]
+                if node.id in skip:
+                    return None
                 return node if node.status == "active" and node.kind != "value" else None
             for kid in kids:
                 leaf = first_active_leaf(kid.id)
